@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.6' // 👈 4.0.6에서 3.2.6으로 수정!
+    id 'io.spring.dependency-management' version '1.1.4' // 👈 1.1.7에서 1.1.4로 수정!
+}
+group = 'com.progist'
+version = '0.0.1-SNAPSHOT'
+description = 'envex_ai'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://repo.spring.io/milestone' }
+}
+
+ext {
+    set('springAiVersion', "1.0.0-M1") // Spring AI 버전
+}
+
+dependencies {
+    // 4.0.1을 3.0.3으로 수정해 주세요!
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+    compileOnly 'org.projectlombok:lombok'
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    runtimeOnly 'org.postgresql:postgresql'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    annotationProcessor 'org.projectlombok:lombok'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter-test:3.0.3'
+    testCompileOnly 'org.projectlombok:lombok'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    // 1. 웹 통신 및 API 생성을 위한 부품 (RestController 등)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // 2. 실시간 타이핑 효과(스트리밍, Flux)를 위한 부품
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.apache.poi:poi:5.2.5'
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    // 3. Spring AI 핵심 부품 (OpenAI 및 Vector DB)
+    implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter'
+    implementation 'org.springframework.ai:spring-ai-pgvector-store-spring-boot-starter'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

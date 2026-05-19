@@ -1,0 +1,24 @@
+[회사 기본 정보]
+- 회사명: (주)젬마 (GEMMA ENVIRONMENT)
+- 대표자명: 문익상
+- 본사 주소: 경기도 안성시 공도읍 대신두길 76-15
+- 동탄 지점: 경기도 화성시 동탄첨단산업1로 51-9, 동탄엠타워 1018호
+- 고객센터 (전화 상담): 070-7600-8577
+- 팩스 번호: 031-624-4385
+- 이메일 문의: gemma@gemma-e.com
+
+[회사 소개 및 비전]
+(주)젬마(GEMMA ENVIRONMENT)는 반도체 및 수처리 산업에서 30여 년의 풍부한 노하우를 축적한 국산 TOC 분석기 제조 및 수질 TMS 전문 기업입니다. 전문적인 수질 계측 솔루션과 신뢰할 수 있는 분석 장비를 제공하여 산업 현장의 환경 관리 및 공정 최적화에 기여하고 있습니다.
+
+[핵심 주력 제품 및 서비스]
+1. 계측기 및 센서 (Measuring Instrument): pH/ORP, 전도도(Conductivity), 용존산소(DO), 잔류염소(Chlorine), 과산화수소(H2O2), 다항목(Multiparameter) 수질 측정 센서.
+2. 수질 분석기 (Analyzer):
+   - TOC(총유기탄소) 분석기: ITOCA 등 국산 수질 TMS 특화 모델
+   - TN(총질소), TP(총인), 요소(Urea), 암모니아(Ammonia), 붕소(Boron Ultra) 분석기
+   - 나노 입자(Nano Particle), THM 등 특수 수질 항목 분석기
+3. 랩 장비 및 포터블 기기: 실험실용 분석 장비(LC-OCD-OND 등) 및 휴대용 다항목 수질 계측기.
+
+[주요 취급 글로벌 파트너 브랜드]
+- Sievers: M-Series, InnovOx, Checkpoint 등 고성능 TOC 분석기 라인업.
+- Thermo Fisher (Orion): 벤치 미터, 센서, 경도/나트륨/실리카/불소/염소 등 각종 정밀 수질 분석기 (예: Orion 2120XP, 2111LL 등).
+- Lovibond: 광도계(Photometer) 및 수질 검사 키트.
