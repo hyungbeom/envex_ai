@@ -1,13 +1,15 @@
 spring:
   datasource:
     url: jdbc:postgresql://aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    username: postgres.fvacvsqryvrouzrqxrxn
+    # ❌ 기존: password: vlzkcb1324!
+    password: ${DB_PASSWORD} # ✅ 환경변수로 대체
     driver-class-name: org.postgresql.Driver
 
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      # ❌ 기존: api-key: sk-proj-...
+      api-key: ${OPENAI_API_KEY} # ✅ 환경변수로 대체
       chat:
         options:
           model: gpt-4o-mini
