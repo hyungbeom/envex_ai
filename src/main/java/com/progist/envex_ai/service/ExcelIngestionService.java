@@ -6,6 +6,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
+import com.progist.envex_ai.util.CompanyFacts;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -24,10 +25,11 @@ public class ExcelIngestionService {
     }
 
     // 🌟 스프링 서버가 완벽하게 켜진 직후에 자동으로 이 메서드를 1번 실행합니다.
-//    @EventListener(ApplicationReadyEvent.class)
+    @EventListener(ApplicationReadyEvent.class)
     public void loadExcelOnStartup() {
         System.out.println("🚀 [시스템] 서버가 시작되었습니다. result.xlsx 데이터를 Vector DB로 로딩합니다...");
         List<Document> documentsToSave = new ArrayList<>();
+        int withLogo = 0;
 
         // 🌟 resources 폴더 안에 있는 result.xlsx 파일을 찾아서 읽어옵니다.
         try (InputStream is = new ClassPathResource("result.xlsx").getInputStream();
@@ -58,7 +60,7 @@ public class ExcelIngestionService {
                 String itemH2      = getCellValue(row.getCell(126)); // ItemH2
                 String brandH2     = getCellValue(row.getCell(121)); // BrandH2
                 String itemH3      = getCellValue(row.getCell(127)); // ItemH3
-                String logo        = getCellValue(row.getCell(110));
+                String logo = resolveLogoFromRow(row);
 
                 if (companyH.contains("천세")) {
                     System.out.println("🚨 [수사 1] 엑셀에서 천세 발견! -> 기업명: " + companyH + " / 부스: " + boot + " / A열값: " + comCode);
@@ -72,7 +74,7 @@ public class ExcelIngestionService {
                 // 🌟 AI가 로고 파일명을 인식할 수 있게 심어줍니다.
                 textBuilder.append(String.format("■ 기업명: %s", companyH));
                 if (!logo.isEmpty() && !logo.equalsIgnoreCase("NULL")) {
-                    String fullLogoUrl = "https://envex.or.kr/board/upload_file/ENVEX_form2/" + logo;
+                    String fullLogoUrl = toLogoUrl(logo);
                     textBuilder.append(String.format(" (로고 URL: %s)", fullLogoUrl));
                 }
                 textBuilder.append("\n");
@@ -98,7 +100,16 @@ public class ExcelIngestionService {
                 }
 
                 // Document 및 메타데이터 생성
-                Map<String, Object> metadata = Map.of("company_id", comCode, "company_name", companyH);
+                Map<String, Object> metadata = new java.util.HashMap<>();
+                metadata.put("company_id", comCode);
+                metadata.put("company_name", companyH);
+                if (!boot.isEmpty() && !boot.equalsIgnoreCase("NULL")) {
+                    metadata.put("booth_number", boot.trim());
+                }
+                if (!logo.isEmpty() && !logo.equalsIgnoreCase("NULL")) {
+                    metadata.put("logo_url", toLogoUrl(logo));
+                    withLogo++;
+                }
                 documentsToSave.add(new Document(textBuilder.toString(), metadata));
             }
 
@@ -106,12 +117,48 @@ public class ExcelIngestionService {
             if (!documentsToSave.isEmpty()) {
                 vectorStore.accept(documentsToSave);
                 System.out.println("✅ [시스템] 총 " + documentsToSave.size() + "개의 기업 정보가 Vector DB에 성공적으로 적재되었습니다!");
+                System.out.println("   └ 로고 URL 포함: " + withLogo + "건");
             }
 
         } catch (Exception e) {
             System.err.println("❌ [시스템] 엑셀 파일을 읽는 중 오류가 발생했습니다: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static final int[] LOGO_COLUMN_CANDIDATES = {110, 109, 111, 108, 107, 112};
+
+    private String resolveLogoFromRow(Row row) {
+        for (int columnIndex : LOGO_COLUMN_CANDIDATES) {
+            String value = getCellValue(row.getCell(columnIndex));
+            if (isLikelyLogoValue(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private static boolean isLikelyLogoValue(String value) {
+        if (value == null || value.isBlank() || "NULL".equalsIgnoreCase(value.trim())) {
+            return false;
+        }
+        String trimmed = value.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return true;
+        }
+        return trimmed.matches("(?i).+\\.(jpg|jpeg|png|gif|webp|bmp)$");
+    }
+
+    private static String toLogoUrl(String logo) {
+        String trimmed = logo.trim();
+        String url;
+        if (trimmed.regionMatches(true, 0, "http://", 0, 7)
+                || trimmed.regionMatches(true, 0, "https://", 0, 8)) {
+            url = trimmed;
+        } else {
+            url = "https://envex.or.kr/board/upload_file/ENVEX_form2/" + trimmed;
+        }
+        return CompanyFacts.sanitizeLogoUrl(url);
     }
 
     private String getCellValue(Cell cell) {
