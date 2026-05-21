@@ -4,7 +4,9 @@ import org.springframework.ai.document.Document;
 
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -40,6 +42,23 @@ public final class CompanyResponseComposer {
             Collection<Document> searchDocuments,
             String searchContext
     ) {
+        return composeParts(aiText, searchDocuments, searchContext, null);
+    }
+
+    public static ComposedParts composeParts(
+            String aiText,
+            Collection<Document> searchDocuments,
+            String searchContext,
+            String userMessage
+    ) {
+        if (userMessage != null && !CompanyQueryIntent.isCompanyRelatedQuery(userMessage, searchDocuments)) {
+            return new ComposedParts(null, formatBody(aiText));
+        }
+
+        if (CompanyQueryIntent.isSingleCompanyQuery(userMessage, searchDocuments)) {
+            return composeSingleCompany(aiText, searchDocuments, searchContext, userMessage);
+        }
+
         List<CompanyFacts> distinctFacts = CompanyFacts.resolveAll(
                 searchDocuments,
                 searchContext,
@@ -85,7 +104,28 @@ public final class CompanyResponseComposer {
         return new ComposedParts(cardHtml, body);
     }
 
-    /** 카드 → 설명 → 카드 → 설명 (업체별 interleave) */
+    private static ComposedParts composeSingleCompany(
+            String aiText,
+            Collection<Document> searchDocuments,
+            String searchContext,
+            String userMessage
+    ) {
+        CompanyFacts fact = CompanyPrimaryResolver.resolve(searchDocuments, searchContext, userMessage);
+        fact = withAiLogo(fact, aiText);
+
+        String cardHtml = null;
+        if (fact.hasCardData()) {
+            cardHtml = CompanyCardBuilder.build(fact);
+        }
+        if (cardHtml != null && cardHtml.isBlank()) {
+            cardHtml = null;
+        }
+
+        String body = formatBody(aiText, userMessage, fact);
+        return new ComposedParts(cardHtml, body);
+    }
+
+    /** 카드 → 설명 (AI 언급 순서 우선, 중복·마크다운 잔여 제거) */
     private static String composeInterleaved(
             List<CompanyFacts> facts,
             String aiText,
@@ -95,42 +135,76 @@ public final class CompanyResponseComposer {
         List<CompanyFacts> enrichedFacts = CompanyFacts.enrichFromCatalog(facts, searchDocuments, searchContext);
         String cleaned = stripDuplicateCompanyChrome(aiText);
         cleaned = BoothMapLinkNormalizer.normalizeText(cleaned);
-        CompanyBulletParser.ParsedAi parsed = CompanyBulletParser.parse(cleaned);
+
+        Map<String, CompanyFacts> factsByKey = new LinkedHashMap<>();
+        for (CompanyFacts fact : enrichedFacts) {
+            factsByKey.put(CompanyFacts.factKey(fact), fact);
+        }
+
+        List<CompanyDescriptionExtractor.OrderedDescription> ordered =
+                CompanyDescriptionExtractor.extractOrdered(cleaned, enrichedFacts);
+        Map<String, String> descriptions = CompanyDescriptionExtractor.descriptionsByFactKey(cleaned, enrichedFacts);
+        String leadingOrphan = descriptions.remove(CompanyDescriptionExtractor.LEADING_ORPHAN_KEY);
+        String outro = CompanyDescriptionExtractor.extractOutro(cleaned, enrichedFacts);
 
         StringBuilder out = new StringBuilder();
-        Set<String> usedKeys = new HashSet<>();
+        Set<String> emitted = new HashSet<>();
 
-        if (parsed.intro() != null && !parsed.intro().isBlank()) {
-            out.append(ChatResponseFormatter.formatChunk(parsed.intro())).append("\n\n");
+        for (CompanyDescriptionExtractor.OrderedDescription block : ordered) {
+            CompanyFacts fact = factsByKey.get(block.factKey());
+            if (fact == null || emitted.contains(block.factKey())) {
+                continue;
+            }
+            appendCardAndDescription(out, withAiLogo(fact, aiText), block.description());
+            emitted.add(block.factKey());
         }
 
-        for (CompanyBulletParser.CompanyBullet bullet : parsed.bullets()) {
-            CompanyFacts matched = CompanyNameMatcher.match(enrichedFacts, bullet.companyName(), usedKeys);
-            if (matched != null) {
-                matched = withAiLogo(matched, aiText);
-                out.append(CompanyCardBuilder.build(matched)).append("\n\n");
-            }
-            String description = formatBody(bullet.description());
-            if (description != null && !description.isBlank()) {
-                out.append(description).append("\n\n");
-            }
-        }
-
+        boolean leadingUsed = !ordered.isEmpty();
         for (CompanyFacts fact : enrichedFacts) {
-            if (!usedKeys.contains(CompanyFacts.factKey(fact))) {
-                out.append(CompanyCardBuilder.build(fact)).append("\n\n");
+            String key = CompanyFacts.factKey(fact);
+            if (emitted.contains(key)) {
+                continue;
             }
+            String desc = descriptions.get(key);
+            if ((desc == null || desc.isBlank()) && !leadingUsed && leadingOrphan != null && !leadingOrphan.isBlank()) {
+                desc = leadingOrphan;
+                leadingUsed = true;
+            }
+            appendCardAndDescription(out, withAiLogo(fact, aiText), desc);
+            emitted.add(key);
         }
 
-        if (parsed.outro() != null && !parsed.outro().isBlank()) {
-            out.append(ChatResponseFormatter.formatChunk(parsed.outro()));
+        if (outro != null && !outro.isBlank()) {
+            if (out.length() > 0) {
+                out.append("\n\n");
+            }
+            out.append(ChatResponseFormatter.formatChunk(outro));
         }
 
         return out.toString().trim();
     }
 
+    private static void appendCardAndDescription(StringBuilder out, CompanyFacts fact, String description) {
+        if (out.length() > 0) {
+            out.append("\n\n");
+        }
+        out.append(CompanyCardBuilder.build(fact));
+        if (description != null && !description.isBlank()) {
+            out.append("\n\n").append(ChatResponseFormatter.formatChunk(description));
+        }
+    }
+
     private static String formatBody(String aiText) {
+        return formatBody(aiText, null, null);
+    }
+
+    private static String formatBody(String aiText, String userMessage, CompanyFacts resolvedCompany) {
         String body = stripDuplicateCompanyChrome(aiText);
+        body = TentativeMatchPhraseStripper.stripWhenNamesAlign(body, userMessage, resolvedCompany);
+        if (resolvedCompany != null) {
+            body = BoothNumberCorrector.alignWithResolvedBooth(body, resolvedCompany);
+            body = CompanyCardBodyStripper.stripRedundantFields(body);
+        }
         body = BoothMapLinkNormalizer.normalizeText(body);
         body = ChatResponseFormatter.formatChunk(body);
         if (body != null) {

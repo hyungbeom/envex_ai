@@ -5,6 +5,7 @@ package com.progist.envex_ai.controller;
 import com.progist.envex_ai.service.VectorStoreDocumentEnricher;
 import com.progist.envex_ai.util.BoothMapLinkNormalizer;
 import com.progist.envex_ai.util.ChatGuardrails;
+import com.progist.envex_ai.util.CompanyContextFilter;
 import com.progist.envex_ai.util.CompanyFacts;
 
 import org.slf4j.Logger;
@@ -130,11 +131,7 @@ public class ChatController {
                 );
             }
 
-            context = searchDocuments.stream()
-
-                    .map(Document::getContent)
-
-                    .collect(Collectors.joining("\n\n"));
+            context = CompanyContextFilter.buildPromptContext(searchDocuments, message);
 
 
 
@@ -164,7 +161,7 @@ public class ChatController {
 
 
 
-        return BoothMapLinkNormalizer.normalizeForClient(aiStream, context, true, searchDocuments)
+        return BoothMapLinkNormalizer.normalizeForClient(aiStream, context, true, searchDocuments, message)
 
                 .doOnSubscribe(sub -> log.debug("[{}] OpenAI stream subscribed", companyId))
 
@@ -217,25 +214,34 @@ public class ChatController {
 
                     - 개최 장소는 코엑스(COEX)입니다.
 
+                    - 개·폐장 시간: 10:00 ~ 18:00 (입장 마감 등 세부는 현장 안내 기준)
+
+                    - 행사 시간·입장·퇴장 등 일반 안내 질문에는 [검색된 참가기업 정보]가 아닌 위 박람회 기본 정보를 바탕으로 답하세요. 참가기업 카드·부스 번호를 붙이지 마세요.
+                    - 위 기본 정보에 없는 일정·요금·행사 변경 사항은 지어내지 말고, ENVEX 공식 홈페이지(https://www.envex.or.kr) 또는 현장 안내 데스크를 안내하세요.
+
                     
 
                     [🌟 중요 지침: 유연한 기업명 검색 및 센스 있는 답변]
 
-                    관람객이 질문한 회사 이름의 일부(예: '천세')만 입력하더라도, 가장 비슷하거나 포함되는 이름(예: '천세(주)')이 있다면 그 기업으로 간주하고 "혹시 OOO를 찾으시나요?"라며 친절하게 안내해 주세요.
+                    - 질문에 적힌 이름과 검색 결과 기업명이 같거나 명확히 같은 회사(예: '디엑스지' ↔ '(주)디엑스지')이면, "혹시 OOO를 찾으시나요?" 같은 확인 멘트 없이 바로 본문 안내를 시작하세요.
+                    - 이름 일부만 입력했거나 어떤 회사인지 불확실할 때만 "혹시 OOO를 찾으시나요?"로 확인한 뒤 안내하세요.
 
                     
 
                  [🌟 출력 포맷 지침 (매우 중요)]
                     - 문단과 항목 사이에는 빈 줄(줄바꿈 2번)을 넣어 가독성을 확보하세요.
                     - 목록은 반드시 `- ` 로 시작하는 불릿 목록을 사용하세요.
-                    - ⚠️ 회사 로고·부스 지도 버튼 HTML은 시스템이 자동으로 상단에 넣습니다. 당신은 텍스트 설명만 작성하세요.
+                    - ⚠️ 회사 로고·부스 번호·부스 이동 버튼은 시스템이 카드로 상단에 자동 삽입합니다. 당신은 회사 소개·제품 설명 텍스트만 작성하세요.
+                    - "혹시 OOO를 찾으시나요?", 부스 번호, 연락처, 홈페이지, 부스 지도 버튼 문구를 본문에 넣지 마세요.
                     - 로고 마크다운 ![...], 부스 지도 링크/버튼(<a>, ![...](/map?booth=...)) 을 직접 넣지 마세요.
+                    - 부스 번호는 반드시 [검색된 참가기업 정보]의 `■ 부스 번호` 또는 metadata에 적힌 해당 업체 번호만 사용하세요. 다른 업체·다른 행의 부스 번호를 섞지 마세요.
 
                     [🌟 여러 업체 추천·목록 안내 시]
-                    - 시스템이 각 업체 카드(로고·부스·부스 이동 버튼)를 회사별 설명 바로 위에 자동 배치합니다.
-                    - 업체당 불릿 1개만, 형식: `- **회사명** — 한두 문장 소개`
+                    - 시스템이 각 업체 카드 아래에 해당 업체 설명을 자동 배치합니다.
+                    - 업체당 반드시 한 줄 불릿, 형식: `- **회사명** — 한두 문장 소개` (회사명은 **굵게**)
+                    - 한 줄에 여러 업체를 이어 쓰지 마세요. 업체마다 줄을 바꿔 작성하세요.
                     - 부스 번호, 연락처, 로고, 지도 링크를 불릿에 반복 나열하지 마세요.
-                    - 선택 안내 문장(인트로·마무리)은 불릿 밖 일반 문단으로 작성 가능합니다.
+                    - 마무리 한 줄(예: "이 업체들이 ~")만 불릿 밖에 작성하세요.
 
                     [검색된 참가기업 정보]
 

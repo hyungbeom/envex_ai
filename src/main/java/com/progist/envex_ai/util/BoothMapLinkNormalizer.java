@@ -74,10 +74,23 @@ public final class BoothMapLinkNormalizer {
             boolean appendBoothButton,
             Collection<Document> searchDocuments
     ) {
+        return normalizeForClient(source, searchContext, appendBoothButton, searchDocuments, null);
+    }
+
+    public static Flux<String> normalizeForClient(
+            Flux<String> source,
+            String searchContext,
+            boolean appendBoothButton,
+            Collection<Document> searchDocuments,
+            String userMessage
+    ) {
         Collection<Document> docs = searchDocuments != null ? searchDocuments : Collections.emptyList();
         return source
                 .collect(StringBuilder::new, StringBuilder::append)
-                .flatMapMany(sb -> toDisplayStream(sb.toString(), searchContext, appendBoothButton, docs));
+                .flatMapMany(sb -> {
+                    String fullText = ChatGuardrails.stripMisplacedRejection(sb.toString(), userMessage);
+                    return toDisplayStream(fullText, searchContext, appendBoothButton, docs, userMessage);
+                });
     }
 
     public static Flux<String> normalizeForClient(Flux<String> source) {
@@ -90,10 +103,21 @@ public final class BoothMapLinkNormalizer {
             boolean appendBoothButton,
             Collection<Document> searchDocuments
     ) {
+        return toDisplayStream(fullText, searchContext, appendBoothButton, searchDocuments, null);
+    }
+
+    static Flux<String> toDisplayStream(
+            String fullText,
+            String searchContext,
+            boolean appendBoothButton,
+            Collection<Document> searchDocuments,
+            String userMessage
+    ) {
         CompanyResponseComposer.ComposedParts parts = CompanyResponseComposer.composeParts(
                 fullText == null ? "" : fullText,
                 searchDocuments,
-                searchContext
+                searchContext,
+                userMessage
         );
 
         List<String> chunks = new ArrayList<>();
@@ -109,14 +133,14 @@ public final class BoothMapLinkNormalizer {
         }
 
         if (parts.companyCardHtml() != null && !parts.companyCardHtml().isBlank()) {
-            String card = parts.companyCardHtml();
-            if (body != null && !body.isBlank()) {
-                card = card + "\n\n";
+            if (body == null || body.isBlank()) {
+                chunks.addAll(InterleavedResponseSplitter.split(parts.companyCardHtml()));
+            } else {
+                String card = parts.companyCardHtml();
+                chunks.add(card + "\n\n");
+                chunks.addAll(chunk(body, STREAM_CHUNK_SIZE));
             }
-            chunks.add(card);
-        }
-
-        if (body != null && !body.isBlank()) {
+        } else if (body != null && !body.isBlank()) {
             chunks.addAll(chunk(body, STREAM_CHUNK_SIZE));
         }
 

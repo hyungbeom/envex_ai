@@ -261,7 +261,16 @@ public record CompanyFacts(String companyName, String logoUrl, String boothNumbe
         return new CompanyFacts(null, null, null);
     }
 
-    private static CompanyFacts merge(CompanyFacts left, CompanyFacts right) {
+    static CompanyFacts merge(CompanyFacts left, CompanyFacts right) {
+        if (left == null && right == null) {
+            return empty();
+        }
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
         return new CompanyFacts(
                 firstNonBlank(left.companyName(), right.companyName()),
                 firstNonBlank(left.logoUrl(), right.logoUrl()),
